@@ -1,19 +1,17 @@
 name: Java CI/CD Pipeline
 
-# Trigger the pipeline on push or pull request to the main branch
+# Trigger on push or pull request to main
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 
-# Define jobs
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest  # Use Ubuntu runner (free tier)
-
+    runs-on: ubuntu-latest
     steps:
-    # Step 1: Checkout the repository code
+    # Step 1: Checkout code
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -22,40 +20,48 @@ jobs:
       uses: actions/setup-java@v4
       with:
         java-version: '17'
-        distribution: 'temurin'  # Eclipse Temurin JDK
+        distribution: 'temurin'
 
-    # Step 3: Compile Java files in the root directory
+    # Step 3: Create lib directory and download JUnit dependencies
+    - name: Download JUnit Dependencies
+      run: |
+        mkdir -p lib
+        curl -L -o lib/junit-api.jar https://repo1.maven.org/maven2/org/junit/jupiter/junit-jupiter-api/5.10.0/junit-jupiter-api-5.10.0.jar
+        curl -L -o lib/junit-engine.jar https://repo1.maven.org/maven2/org/junit/jupiter/junit-jupiter-engine/5.10.0/junit-jupiter-engine-5.10.0.jar
+        curl -L -o lib/platform.jar https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.0/junit-platform-console-standalone-1.10.0.jar
+        curl -L -o lib/hamcrest.jar https://repo1.maven.org/maven2/org/hamcrest/hamcrest/2.2/hamcrest-2.2.jar
+        ls -l lib/  # Verify downloads
+        echo "JUnit dependencies downloaded"
+
+    # Step 4: Compile with JUnit in classpath
     - name: Compile
       run: |
         mkdir -p classes
-        javac -d classes *.java
+        javac -cp "lib/junit-api.jar:lib/junit-engine.jar:lib/platform.jar:lib/hamcrest.jar" -d classes *.java
+        ls -l classes/  # Verify compilation
         echo "Build successful!"
 
-    # Step 4: Run JUnit 5 tests
+    # Step 5: Run Tests
     - name: Run Tests
       run: |
-        curl -L -o junit-api.jar https://repo1.maven.org/maven2/org/junit/jupiter/junit-jupiter-api/5.10.0/junit-jupiter-api-5.10.0.jar
-        curl -L -o junit-engine.jar https://repo1.maven.org/maven2/org/junit/jupiter/junit-jupiter-engine/5.10.0/junit-jupiter-engine-5.10.0.jar
-        curl -L -o platform.jar https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.0/junit-platform-console-standalone-1.10.0.jar
-        curl -L -o hamcrest.jar https://repo1.maven.org/maven2/org/hamcrest/hamcrest/2.2/hamcrest-2.2.jar
-        java -cp "classes:junit-api.jar:junit-engine.jar:platform.jar:hamcrest.jar" org.junit.platform.console.ConsoleLauncher --select-class MathUtilsTest
-      continue-on-error: false  # Fail pipeline if tests fail
+        java -cp "classes:lib/junit-api.jar:lib/junit-engine.jar:lib/platform.jar:lib/hamcrest.jar" org.junit.platform.console.ConsoleLauncher --select-class MathUtilsTest
+      continue-on-error: false
 
-    # Step 5: Create JAR artifact
+    # Step 6: Create JAR
     - name: Create JAR
       run: |
         cd classes
         jar cf ../myapp.jar *
         echo "JAR created"
 
-    # Step 6: Upload JAR as artifact
+    # Step 7: Upload JAR
     - name: Upload JAR
       uses: actions/upload-artifact@v4
       with:
         name: myapp-jar
         path: myapp.jar
 
-    # Step 7: Simulate deployment (runs only on main branch pushes)
+    # Step 8: Simulate Deploy
     - name: Simulate Deploy
       if: github.ref == 'refs/heads/main'
       run: |
